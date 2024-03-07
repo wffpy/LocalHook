@@ -1,0 +1,2 @@
+# LocalHook
+Hook Local Function
