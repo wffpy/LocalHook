@@ -25,10 +25,8 @@ uintptr_t find_free_address(uintptr_t aligned_addr, size_t size) {
     uintptr_t end = 0;
     uintptr_t result = aligned_addr;
     while (std::getline(maps_file, line)) {
-        // std::cout << "line= " << line << std::endl;
         std::istringstream iss(line);
         iss >> std::hex >> start;
-        // std::cout << "start = " << start << std::endl;
         iss.ignore(std::numeric_limits<std::streamsize>::max(), '-');
         iss >> std::hex >> end;
         if (end < aligned_addr) {
@@ -40,7 +38,7 @@ uintptr_t find_free_address(uintptr_t aligned_addr, size_t size) {
             result = end;
         }
     }
-    std::cout << "result = " << std::hex << result << std::endl;
+    // std::cout << "result = " << std::hex << result << std::endl;
     return result;
 }
 
@@ -53,88 +51,11 @@ void *alloc_page_near_address(void *target_addr) {
     if (mmap_addr == MAP_FAILED) {
         perror("mmap");
         std::cout << "mmap failed" << std::endl;
+        exit(0);
     }
     std::cout << "mmap success: " << mmap_addr << std::endl;
     return mmap_addr;
 }
-
-// void *alloc_mem(size_t size) {
-//     int prot = PROT_READ | PROT_WRITE | PROT_EXEC;
-//     int flags = MAP_ANONYMOUS | MAP_PRIVATE;
-//     int fd = -1;
-//     off_t offset = 0;
-//     void *ptr = mmap(NULL, size, prot, flags, fd, offset);
-//     if (ptr == MAP_FAILED) {
-//         perror("mmap");
-//     }
-//     printf("Mapped memory at address: %p\n", ptr);
-//     return ptr;
-// }
-
-// void *alloc_page_near_address(void *target_addr) {
-//     std::cout << "alloc_page_near_address: " << target_addr << std::endl;
-//     static int64_t page_size = getpagesize();
-//     size_t length = page_size;
-//     int prot = PROT_READ | PROT_WRITE | PROT_EXEC; // 内存保护标志，允许读写
-//     int flags =
-//         MAP_FIXED_NOREPLACE | MAP_ANONYMOUS; // 映射标志，指定了 MAP_FIXED
-//     int fd = -1;                             // 没有文件描述符
-//     off_t offset = 0;                        // 没有文件偏移量
-
-//     uintptr_t start_addr = ((uintptr_t)target_addr) & (~(page_size - 1));
-//     std::cout << "start_addr: " << std::hex << start_addr << std::endl;
-//     uint64_t page_start = start_addr - (start_addr % page_size);
-//     std::cout << "page_start: " << std::hex << page_start << std::endl;
-//     int64_t bytes_offset = page_size;
-//     while (1) {
-//         if (bytes_offset < INT32_MAX) {
-//             uint64_t address = page_start + bytes_offset;
-//             std::cout << "address: " << address << std::endl;
-//             void *ptr = mmap((void *)address, length, prot, flags, fd,
-//             offset); std::cout << "after mmp" << std::endl; if (ptr ==
-//             MAP_FAILED) {
-//                 perror("mmap");
-//             } else if (ptr) {
-//                 printf("Mapped memory at address: %p\n", ptr);
-//                 return ptr;
-//             }
-//             address = page_start - bytes_offset;
-//             std::cout << "address: " << address << std::endl;
-//             ptr = mmap((void *)address, length, prot, flags, fd, offset);
-//             if (ptr == MAP_FAILED) {
-//                 perror("mmap");
-//             } else if (ptr) {
-//                 printf("Mapped memory at address: %p\n", ptr);
-//                 return ptr;
-//             }
-
-//             bytes_offset += page_size;
-//         } else {
-//             std::cout << "bytes offset is large than INT32_MAX: "
-//                       << bytes_offset << std::endl;
-//             exit(0);
-//         }
-//     }
-//     // void *ptr = mmap(target_addr, length, prot, flags, fd, offset);
-//     // void *ptr = mmap(NULL, length, prot, flags, fd, offset);
-//     // if (ptr == MAP_FAILED) {
-//     //     perror("mmap");
-//     //     return nullptr;
-//     // }
-//     // printf("Mapped memory at address: %p\n", ptr);
-//     return nullptr;
-// }
-
-// void WriteAbsoluteJump64(void* absJumpMemory, void* addrToJumpTo)
-// {
-//     uint8_t absJumpInstructions[] = { 0x49, 0xBA, 0x00, 0x00, 0x00, 0x00,
-//     0x00, 0x00, 0x00, 0x00,
-//                       0x41, 0xFF, 0xE2 };
-
-//     uint64_t addrToJumpTo64 = (uint64_t)addrToJumpTo;
-//     memcpy(&absJumpInstructions[2], &addrToJumpTo64, sizeof(addrToJumpTo64));
-//     memcpy(absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions));
-// }
 
 struct X64Instructions {
     cs_insn *instructions;
@@ -184,70 +105,6 @@ int64_t check_func_mem(void *function) {
     return byte_count;
 }
 
-X64Instructions StealBytes(void *function) {
-    // static int64_t page_size = getpagesize();
-    // // get the start address of the page containing the function
-    // uintptr_t page_start = ((uintptr_t)function) & (~(page_size - 1));
-
-    // // set the memory protections to read/write/execute, so that we can
-    // modify the instructions if (mprotect((void*)page_start, page_size,
-    // PROT_READ | PROT_WRITE | PROT_EXEC) == -1) {
-    //     perror("mprotect");
-    // }
-
-    // Disassemble stolen bytes
-    std::cout << "Stealing bytes from: " << function << std::endl;
-    csh handle;
-    auto s = cs_open(CS_ARCH_X86, CS_MODE_64, &handle);
-    if (s != 0) {
-        std::cout << "Error opening capstone handle" << std::endl;
-    }
-    s = cs_option(handle, CS_OPT_DETAIL,
-                  CS_OPT_ON); // we need details enabled for relocating RIP
-                              // relative instrs
-    if (s != 0) {
-        std::cout << "Error set option" << std::endl;
-    }
-
-    // for cpu with BIT check, the first instruction of a function is endbr
-    // endbr64 instruction: 0xfa1e0ff3
-    uint32_t endbr64 = 0xfa1e0ff3;
-    uint8_t *code = (uint8_t *)function;
-    if (endbr64 == *(uint32_t *)function) {
-        code = (uint8_t *)function + 4;
-    }
-
-    size_t count;
-    cs_insn *disassembledInstructions; // allocated by cs_disasm, needs to be
-                                       // manually freed later
-    count = cs_disasm(handle, code, 20, (uint64_t)code, 20,
-                      &disassembledInstructions);
-    if (count == 0) {
-        s = cs_errno(handle);
-        std::cout << "error status: " << cs_strerror(s) << std::endl;
-    }
-
-    // get the instructions covered by the first 9 bytes of the original
-    // function
-    uint32_t byte_count = 0;
-    uint32_t instr_count = 0;
-    for (int32_t i = 0; i < count; ++i) {
-        cs_insn &inst = disassembledInstructions[i];
-        byte_count += inst.size;
-        instr_count++;
-        if (byte_count >= 5)
-            break;
-    }
-
-    std::cout << "byte_count: " << byte_count << std::endl;
-    std::cout << std::hex << (void *)code << std::endl;
-    // replace instructions in target func wtih NOPs
-    memset((void *)code, 0x90, byte_count);
-
-    cs_close(&handle);
-    return {disassembledInstructions, instr_count, byte_count};
-}
-
 X64Instructions steal_bytes(void *function, int64_t bytes) {
     // Disassemble stolen bytes
     std::cout << "Stealing bytes from: " << function << std::endl;
@@ -291,8 +148,7 @@ X64Instructions steal_bytes(void *function, int64_t bytes) {
             break;
     }
 
-    std::cout << "byte_count: " << byte_count << std::endl;
-    std::cout << std::hex << (void *)code << std::endl;
+    // std::cout << std::hex << (void *)code << std::endl;
     // replace instructions in target func wtih NOPs
     memset((void *)code, 0x90, byte_count);
 
@@ -351,11 +207,6 @@ bool is_rip_relative_inst(cs_insn &inst) {
     }
     return false;
 }
-
-// template<typename T>
-// T get_operand_disp(cs_x86_op* x86_op) {
-//     return x86_op->mem.disp;
-// }
 
 bool check_mem_offset(int64_t offset, int64_t bytes) {
     switch (bytes) {
@@ -503,13 +354,26 @@ void rewrite_call_instruction(cs_insn &inst, uint8_t *write_addr,
     memcpy(inst.bytes, jmp_bytes, sizeof(jmp_bytes));
 }
 
+/**
+ *       __________________________________
+ *      |______________endbr64_____________|
+ *      |______________......._____________|------|
+ *      |______________......._____________|      |--> stolen instructions
+ *      |______________......._____________|------|
+ *      |______________endbr64_____________| 4 bytes
+ *      |__________mov r10, addr___________| 10 bytes = 2bytes + 8 bytes
+ *      |__________jmpq r10________________| 3 bytes
+ *      |__________________________________|
+ **/
 int64_t build_callback(void *func2hook, void *hook_mem, int64_t bytes) {
     X64Instructions stolenInstrs = steal_bytes(func2hook, bytes);
 
+    uint64_t endbr64_bytes = 4;
     uint64_t mov_bytes = 10;
     uint64_t jmp_abs_bytes = 3;
     uint8_t *stolenByteMem = (uint8_t *)hook_mem;
-    uint8_t *jumpBackMem = stolenByteMem + stolenInstrs.numBytes + 4;
+    uint8_t *jumpBackMem =
+        stolenByteMem + endbr64_bytes + stolenInstrs.numBytes;
     std::cout << "stolen bytes: " << stolenInstrs.numBytes << std::endl;
     uint8_t *absTableMem = jumpBackMem + mov_bytes + jmp_abs_bytes;
 
@@ -525,7 +389,6 @@ int64_t build_callback(void *func2hook, void *hook_mem, int64_t bytes) {
             return 0; // bail out on loop instructions, I don't have a good way
                       // of handling them
         }
-        std::cout << "instruction: " << i << std::endl;
 
         if (is_rip_relative_inst(inst)) {
             std::cout << "rip relative instruction: " << std::endl;
@@ -549,106 +412,24 @@ int64_t build_callback(void *func2hook, void *hook_mem, int64_t bytes) {
         stolenByteMem += inst.size;
     }
 
-    write_absolute_jump64(jumpBackMem, (uint8_t *)func2hook + 4 + 8);
+    write_absolute_jump64(jumpBackMem, (uint8_t *)func2hook + endbr64_bytes +
+                                           stolenInstrs.numBytes);
     free(stolenInstrs.instructions);
     return absTableMem - (uint8_t *)hook_mem;
 }
 
-/**
- *      |__________________________________|
- *      |______________endbr64_____________|
- *      |______________......._____________|------|
- *      |______________......._____________|      |--> stolen instructions
- *      |______________......._____________|------|
- *      |______________endbr64_____________| 4 bytes
- *      |__________mov r10, addr___________| 10 bytes = 2bytes + 8 bytes
- *      |__________jmpq r10________________| 3 bytes
- *      |__________________________________|
- **/
-int64_t build_trampoline(void *func2hook, void *dstMemForTrampoline) {
-    X64Instructions stolenInstrs = StealBytes(func2hook);
-
-    uint64_t endbr64_bytes = 4;
-    uint64_t mov_bytes = 10;
-    uint64_t jmp_abs_bytes = 3;
-    uint8_t *stolenByteMem = (uint8_t *)dstMemForTrampoline;
-    // uint8_t* jumpBackMem = stolenByteMem + endbr64_bytes +
-    // stolenInstrs.numBytes;
-    uint8_t *jumpBackMem = stolenByteMem + stolenInstrs.numBytes;
-    // 13 is the size of a 64 bit mov/jmp instruction pair
-    // uint8_t* absTableMem = jumpBackMem + endbr64_bytes + mov_bytes +
-    // jmp_abs_bytes;
-    uint8_t *absTableMem = jumpBackMem + mov_bytes + jmp_abs_bytes;
-
-    // first 4 bytes is for endbr64
-    // stolenByteMem += endbr64_bytes;
-    std::cout << "stolen memory begin: " << std::hex << stolenByteMem
-              << std::endl;
-
-    for (uint32_t i = 0; i < stolenInstrs.numInstructions; ++i) {
-        cs_insn &inst = stolenInstrs.instructions[i];
-        if (inst.id >= X86_INS_LOOP && inst.id <= X86_INS_LOOPNE) {
-            return 0; // bail out on loop instructions, I don't have a good way
-                      // of handling them
-        }
-
-        if (is_rip_relative_inst(inst)) {
-            relocate_instruction(&inst, stolenByteMem);
-        } else if (is_relative_jump(inst)) {
-            uint64_t abs_jmp_size = add_jmp_to_abs_table(inst, absTableMem);
-            rewrite_jmp_instruction(inst, stolenByteMem, absTableMem);
-            absTableMem += abs_jmp_size;
-        } else if (inst.id == X86_INS_CALL) {
-            // uint32_t abs_call_size = add_call_to_abs_table(inst, absTableMem,
-            // jumpBackMem);
-            uint8_t *jump_back_addr = stolenByteMem + inst.size;
-            uint32_t abs_call_size =
-                add_call_to_abs_table(inst, absTableMem, jump_back_addr);
-            rewrite_call_instruction(inst, stolenByteMem, absTableMem);
-            absTableMem += abs_call_size;
-        }
-        std::cout << "memory to store stolen bytes: " << std::hex
-                  << stolenByteMem << std::endl;
-        memcpy(stolenByteMem, inst.bytes, inst.size);
-        stolenByteMem += inst.size;
-    }
-
-    // WriteAbsoluteJump64(jumpBackMem, (uint8_t*)func2hook + 5);
-    write_absolute_jump64(jumpBackMem, (uint8_t *)func2hook + 5);
-    free(stolenInstrs.instructions);
-
-    return uint32_t(absTableMem - (uint8_t *)dstMemForTrampoline);
-}
-
-void print_first_inst(void *func) {
-    enable_mem_write(func);
-    X64Instructions insts = StealBytes(func);
-    int64_t inst_num = insts.numInstructions;
-    std::cout << "First inst num: " << inst_num << std::endl;
-    for (int64_t i = 0; i < inst_num; ++i) {
-        cs_insn &inst = insts.instructions[i];
-        std::cout << i << "st inst: " << std::endl;
-        std::cout << inst.op_str << std::endl;
-    }
-}
-
 void install_hook(void *hooked_func, void *payload_func,
                   void **trampoline_ptr) {
-    // int64_t byte_count = check_func_mem(hooked_func);
-    // std::cout << "byte count: " << byte_count << std::endl;
-    uint8_t jmp_instrs[9] = {0xE9, 0x0, 0x0, 0x0, 0x0, 0xf3, 0x0f, 0x1e, 0xfa};
-
+    uint8_t jmp_instrs[5] = {0xE9, 0x0, 0x0, 0x0, 0x0};
     enable_mem_write(hooked_func);
-    // std::cout << "payload func: " << std::hex << payload_func << std::endl;
     int64_t addr_distance =
         ((uint64_t)payload_func + 4) - ((uint64_t)hooked_func + 9);
     if (INT32_MIN < addr_distance < INT32_MAX) {
         // for 32 bit relative jump
-        uint8_t jmp_instrs[5] = {0xE9, 0x0, 0x0, 0x0, 0x0};
         void *hook_mem = alloc_page_near_address(hooked_func);
         enable_mem_write(hook_mem);
         int64_t call_back_size = build_callback(hooked_func, hook_mem, 5);
-        std::cout << "hooked_mem: " << std::hex << hook_mem << std::endl;
+        std::cout << "hookd_mem: " << std::hex << hook_mem << std::endl;
         *trampoline_ptr = hook_mem;
 
         std::cout << "hook distance is in 32 bit range" << std::endl;
@@ -659,22 +440,20 @@ void install_hook(void *hooked_func, void *payload_func,
         memcpy(((uint8_t *)hooked_func) + 4, jmp_instrs, sizeof(jmp_instrs));
     } else {
         // hook func is too far away, need to create a trampoline
-        void *hook_memory = alloc_page_near_address(hooked_func);
-        printf("hook memory: %p\n", hook_memory);
-        // std::cout << "hook memory: " << std::hex << hook_memory << std::endl;
-        int64_t trampoline_size = build_trampoline(hooked_func, hook_memory);
-        *trampoline_ptr = hook_memory;
+        void *hook_mem = alloc_page_near_address(hooked_func);
+        enable_mem_write(hook_mem);
+        int64_t trampoline_size = build_callback(hooked_func, hook_mem, 5);
+        std::cout << "callback size: " << std::dec << trampoline_size
+                  << std::endl;
+        *trampoline_ptr = (uint8_t *)hook_mem;
 
-        std::cout << "create relay function" << std::endl;
         // create relay function
-        void *relay_func_mem = (u_int8_t *)hook_memory + trampoline_size;
-        write_absolute_jump64(relay_func_mem, payload_func);
+        void *relay_func_mem = (u_int8_t *)hook_mem + trampoline_size;
+        write_absolute_jump64(relay_func_mem, (uint8_t *)payload_func + 4);
 
-        // uint8_t jmp_instrs[9] = {0xE9, 0x0, 0x0, 0x0, 0x0, 0xf3, 0x0f, 0x1e,
-        // 0xfa};
         const uint64_t relative_addr =
-            (uint64_t)relay_func_mem -
-            ((uint64_t)hooked_func + sizeof(jmp_instrs));
+            (uint8_t *)relay_func_mem -
+            ((uint8_t *)hooked_func + 4 + sizeof(jmp_instrs));
         if (relative_addr > UINT32_MAX) {
             std::cout << "Error: relative address is larger than UINT32_MAX"
                       << std::endl;
