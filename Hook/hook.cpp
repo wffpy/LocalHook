@@ -13,6 +13,8 @@
 #include "capstone/capstone.h"
 #include "capstone/x86.h"
 
+#include "../Log/LogStream.h"
+
 // using namespace hook;
 namespace hook {
 
@@ -38,7 +40,7 @@ uintptr_t find_free_address(uintptr_t aligned_addr, size_t size) {
             result = end;
         }
     }
-    // std::cout << "result = " << std::hex << result << std::endl;
+    WLOG() << "result = " << std::hex << result;
     return result;
 }
 
