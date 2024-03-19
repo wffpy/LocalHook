@@ -6,6 +6,7 @@
 namespace local{
 int64_t add(int64_t lhs, int64_t rhs);
 int64_t sub(int64_t lhs, int64_t rhs);
+int64_t func();
 }   // namespace local
 
 #endif // LOCAL_ADD_H
